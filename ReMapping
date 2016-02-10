@@ -1,0 +1,57 @@
+# Remap the positions of the particles in the sheared sample to a square simulation box to make analyzing local neighbourhoods easier.  
+
+# General parameters
+echo			log
+units			lj
+dimension		2
+atom_style		atomic
+
+# Define the variables that we will need!
+
+# Strain value
+variable		applied_strain universe 0 0.01 0.03 0.05 0.07 0.1 0.2 0.3
+
+# Shear direction
+#variable		dir index xy yz xz
+variable		dir index xy
+
+# Temperature
+variable		n index 0.45
+
+# Read in the data to be used for the simulation
+read_restart		/Volumes/SecondHD/Summer2010/BLJ_Glass/Glass/Triclinic_box/SHEAR_TEMP${n}_DIR${dir}_STRAIN${applied_strain}_EQUIL.RESTART
+
+# Define the timestep
+timestep			0.005
+
+# Define the inverse affine transformation to return the glass to its original state
+variable		retdel equal -1.0*${applied_strain}*lx
+
+# Run the simulation in NVT using the average volume computed for the read in data case!
+fix				NVT all nvt temp $n $n 1.0
+
+# Enforce the 2D condition as the last fix of the simulation
+fix				2 all enforce2d
+
+# Dump the system configurations every say, 10000 timesteps
+dump			MyDump all custom 650000 Shear_BLJ_glass_TEMP${n}_STRAIN${applied_strain}_DIR${dir}.REMAPPED.dump id type xu yu zu vx vy vz ix iy iz x y z
+
+# Deform the sample back to its original position
+displace_box	all ${dir} delta ${retdel} units box
+
+# Run the simulation for awhile
+run				0
+
+# Loops over the shear direction
+#clear
+#next			dir
+#jump			/Volumes/SecondHD/Summer2010/BLJ_Glass/Glass/Triclinic_box/ReMapping
+
+# Loop over the applied strain variable (used as a universe variable)
+clear
+next			applied_strain
+jump			/Volumes/SecondHD/Summer2010/BLJ_Glass/Glass/Triclinic_box/ReMapping
+
+print			"End of simulation!!"
+
+# End of Simulation

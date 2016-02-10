@@ -1,0 +1,98 @@
+#####################################################################################
+# Oscillating the glassy state														#
+# Created by: Dan on 25/02/2010														#
+# University of Ottawa																#
+# This program will load the simulated glassy state after oscillation and age it    #
+#####################################################################################
+
+# First, we need some general parameters
+echo			log
+units           lj
+atom_style      bond
+special_bonds   0.0 1.0 1.0
+
+# The simulation is to be carried out at a single temperature, namely that defined in the quenching process of 0.2
+variable		n index 0.2
+
+# We may also need some universe variables as well, this will correspond the aging value of the glass used
+#variable		i universe 1 2 3 4 5 6 7 8
+#variable		i universe 1 2 3 4 5 6 7 8 9 10 11 12
+
+# We need to define a direction of shear, we don't expect the direction to change much so we will choose one, might still be interesting to investigate other directions
+variable		shear_direction index xy
+#variable		shear_direction index xy xz yz
+
+# Too make life easy, age time!
+variable		i index 100000
+
+# Applied strain, we will consider small strain in the elastic regime and larger strain in the plastic regime
+#variable		applied_strain index 0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1
+#variable		applied_strain index 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1
+variable		applied_strain index 0.2 0.3 0.4 0.5
+#variable		applied_strain index 0.2 0.3 0.4
+#variable		applied_strain index 0.2 0.3 
+
+# Define the run time during the first oscillation
+#variable		run_frist index 1500000
+
+# Define the run time after the sample is returned to its original position for the first time
+#variable		return_first index 100000
+
+# Define the run time during the second oscillation
+#variable		run_second index 1000000
+
+# Define the run time after the sample is returned to its original position for the second and (for now) last time
+#variable		return_second index 20000000
+
+# Read in the state already prepared by the quenching
+read_restart		OSCILLATE.AGE100000.TEMP0.2.DIR${shear_direction}.STRAIN${applied_strain}.RESTART
+
+# Neighbor list parameters
+neighbor		0.4 bin
+neigh_modify	every 1 delay 1 check yes
+
+# Bond potential parameters
+#bond_style		fene
+#bond_coeff		1 30.0 1.5 1.0 1.0
+
+# Bond potential parameters
+#pair_style		lj/cut 2.5
+#pair_modify		shift yes
+#pair_coeff		1 1 1.0 1.0 2.5
+
+# Timestep and thermodynamic output stuff every 1000 time steps lets say.
+thermo_style	custom step temp press vol pe ke pxy pxz pyz
+thermo			1000	
+timestep		0.005
+
+# Define the original length scale to be used in the affine transformations, just in case.  Actually the transformation you defined should be fine.
+#variable		lenx lx
+
+# Be sure to check all these before running!!!!!!!!!!!!!!!!!!!!!
+
+# Define the strain used for the affine transformation to defore the glassy sample
+#variable		del equal 1.0*${applied_strain}*lx
+
+# Define the inverse affine transformation to return the glass to its original state
+#variable		retdel equal -1.0*${applied_strain}*lx
+
+# Run the simulation in NPT Figure this shit out later
+#fix				NPT all npt $n $n 1.0 xyz -3.38809 -3.38809 0.001
+
+# Run the simulation in NVT, this is actually a lot easier.  Might introduce fluctuations, but should be ok if you run the simulation for a few time steps to equalize
+fix				NVT all nvt $n $n 1.0
+
+# Dump system configuration at each 900000 time steps to be used later to characterize dynamic heterogeneity, this should limit the size of the end file to only that of the final configuration
+dump			MyDump all custom 1301001 AGING.AGE$i.TEMP$n.DIR${shear_direction}.STRAIN${applied_strain}.DUMP tag xu yu zu vx vy vz
+
+# Run the simulation to warm it up a bit, check this!!!
+log				log.AGING.AGE$i.TEMP$n.DIR${shear_direction}.STRAIN${applied_strain}.Aging_Final
+run				1
+
+# Write the final configuration of the sample for later analysis maybe
+write_restart	AGING.AGE$i.TEMP$n.DIR${shear_direction}.STRAIN${applied_strain}.RESTART
+
+# End of loop over the strain strenght variable
+clear
+next			applied_strain
+jump			age_oscillated 

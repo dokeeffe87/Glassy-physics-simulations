@@ -1,0 +1,97 @@
+# Create a 2D binary Lennard-Jones glass at constant pressure to be used in an oscillation experiment later.
+# We will compute the average volume at the desired pressure and use that to fix the volume of the deformed samples
+# We also want to see if this is a good glassy state, so look at volume as a function of temperature
+# Mean squared displacement and heat capacity at constant pressure
+
+# General Parameters
+
+echo			log
+units			lj
+dimension		2
+atom_style		atomic
+
+# Carry out the simulation at temperature n
+#variable		n index 0.4
+#variable		n universe 0.2 0.3 0.4 0.45 0.5 0.6 0.7 0.8 0.9 1.0
+#variable		n universe 0.41 0.42 0.43 0.44 0.46 0.47 0.48 0.49
+variable		n universe 0.45
+
+# Define a way to rest the velocities, although for a large enough system, this may not be necessary
+#variable		i universe 1 2 3 4 5 6 7 8 9 10
+
+# We will try to do this with one large system as opposed to a bunch of small ones!  
+
+lattice			sq2 0.1
+#region			box block 0 224 0 224 -0.5 0.5
+region			box prism 0 224 0 224 -0.5 0.5 0 0 0
+create_box		2 box
+create_atoms	1 box
+
+# Make a 50/50 mixture of different particle types
+
+set				group all type/fraction 2 0.5 1
+
+# Define the masses of the particles as unity
+
+mass			1 1
+mass			2 1
+
+# Velcoity adjustment, in case we need to do this to measure propensities
+#velocity		all create $n $i dist gaussian
+
+# Neighbor list parameters
+neighbor		0.4 bin
+neigh_modify	every 1 delay 1 check yes
+
+# Define the pairwise potential
+pair_style		ljD6/cut 4.5
+pair_modify		shift yes
+pair_coeff		1 1 1.0 1.0 4.5
+pair_coeff		1 2 1.0 1.2 5.4
+pair_coeff		2 2 1.0 1.4 6.3
+
+# We do not need to compute mean square displacements yet, we are just interested in producing the glassy state
+# Actually, output the meansquare displacement and see how it varies with time in these simulations
+compute			MSD all msd
+
+# Try to compute the stress tensor per atom
+#compute			STRESS all stress/atom
+
+# Timestep and thermodynamic output
+thermo_style	custom step temp press vol pe ke pxy pxz pyz etotal
+thermo			1000
+timestep		0.005
+
+# We run the simulation in NPT
+fix				NPT all npt temp $n $n 1.0 iso 13.5 13.5 10.0 drag 1.0
+
+
+# Output the MSD (average it yourself later, easier to figure out
+fix				OUT all ave/time 1 1 100 c_MSD file MSD.temp${n}.dat mode vector off 1
+
+# Output the Stress tensor components per atom
+#fix				OUT2 all ave/time 1 1 100 c_STRESS file STRESS.temp${n}.dat mode vector off 1
+
+# Enfore the 2D condition
+fix				2 all enforce2d
+
+# Dump the system config every 1000 steps
+dump			myDump all custom 5000 BLJ_glass.t${n}.checkbehaviour.dump id type xu yu zu vx vy vz ix iy iz x y z
+
+# Run the simulation for many time steps
+log				log.BLJ.Glass.temp${n}.checkbehaviour.RUNNING
+run				200000
+#run				50000
+
+# Write final configuration
+write_restart	BLJ.Glass.temp${n}.restart
+
+# There doesn't seem to be any need to restart the simulation or to change the particle velocities at this point!
+# Loop over the temperature variable
+clear
+next			n
+jump			/Volumes/SecondHD/Summer2010/BLJ_GLass/Glass/Triclinic_box/Create_BLJ_glass
+
+print	"End of Simulation!"
+
+# End of simulation!

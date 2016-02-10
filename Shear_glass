@@ -1,0 +1,98 @@
+# Shear the glassy sample at T = 0.45 produced earlier!
+
+# General parameters
+
+echo			log
+units			lj
+dimension		2
+atom_style		atomic
+
+# Define the applied strain to be used on the system
+#variable		applied_strain index 0 0.01 0.03 0.05 0.07 0.1 0.2 0.3
+variable		applied_strain universe 0 0.01 0.03 0.05 0.07 0.1 0.2 0.3
+
+# Define the temperature at which the simulations will occur
+variable		n index 0.45
+
+# Define the shear directions to be used
+#variable		dir index xy
+variable		dir index xy yz xz
+
+# Read in the data to be used for the simulation
+read_restart		/Volumes/SecondHD/summer2010/BLJ_Glass/Glass/Triclinic_box/BLJ.Glass.temp0.45.restart
+
+# Neighbor list parameters
+neighbor		0.4 bin
+neigh_modify	every 1 delay 1 check yes
+
+# Define the pairwise potential
+pair_style		ljD6/cut 4.5
+pair_modify		shift yes
+pair_coeff		1 1 1.0 1.0 4.5
+pair_coeff		1 2 1.0 1.2 5.4
+pair_coeff		2 2 1.0 1.4 6.3
+
+# Compute the mean square displacement somehow...
+# We should define a few groups to measure the MSD of 
+# Actually, it would be much easier to just measure this in post analysis!
+
+
+# Timestep and thermodynamic output
+thermo_style	custom step temp press vol pe ke pxy pxz pyz etotal
+thermo			1000
+timestep		0.005
+
+# Define the strain used for the affine transformation to defore the glassy sample
+variable		del equal 1.0*${applied_strain}*lx
+
+# Define the inverse affine transformation to return the glass to its original state
+variable		retdel equal -1.0*${applied_strain}*lx
+
+# Run the simulation in NVT using the average volume computed for the read in data case!
+fix				NVT all nvt temp $n $n 1.0
+
+# Fix the MSD output using an ave/time command
+
+# Enforce the 2D condition as the last fix of the simulation
+fix				2 all enforce2d
+
+# Dump the system configurations every say, 1000 timesteps
+dump			MyDump all custom 1000 Shear_BLJ_glass_TEMP${n}_STRAIN${applied_strain}_DIR${dir}.dump id type xu yu zu vx vy vz ix iy iz x y z
+
+# Deform the sample for the first time
+displace_box	all ${dir} delta ${del} units box
+
+# Run the simulation for awhile
+log				log_SHEAR_TEMP${n}_DIR${dir}_STRAIN${applied_strain}.FIRST
+run				100000
+
+# Deform the sample back to its original position
+displace_box	all ${dir} delta ${retdel} units box
+
+# Run the sample in its returned position
+log				log_SHEAR_TEMP${n}_DIR${dir}_STRAIN${applied_strain}.RETURN
+run				100000
+
+# Deform the sample again and let it run for awhile
+displace_box	all ${dir} delta ${del} units box
+
+# Run for the last time
+log				log_SHEAR_TEMP${n}_DIR${dir}_STRAIN${applied_strain}.SECOND
+run				500000
+
+# Write a final configuration of the sample
+write_restart	SHEAR_TEMP${n}_DIR${dir}_STRAIN${applied_strain}.RESTART
+
+# Loops over the shear direction
+clear
+next			dir
+jump			/Volumes/SecondHD/Summer2010/BLJ_Glass/Glass/Triclinic_box/Shear_glass
+
+# Loop over the applied strain variable (used as a universe variable)
+clear
+next			applied_strain
+jump			/Volumes/SecondHD/Summer2010/BLJ_Glass/Glass/Triclinic_box/Shear_glass
+
+print			"End of simulation!!"
+
+# End of Simulation
